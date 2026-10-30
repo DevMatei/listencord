@@ -22,7 +22,7 @@ class Prefs(context: Context) {
 
     // discord
     var appId: String
-        get() = str("app_id")
+        get() = str("app_id", "1565801603527737404")
         set(v) = put("app_id", v)
     var name: String
         get() = str("name", "music")
