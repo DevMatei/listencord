@@ -151,12 +151,7 @@ class Presence(context: Context, private val prefs: Prefs) {
         a.copy(start = 0) == b.copy(start = 0) && (!b.playing || abs(a.start - b.start) < 3000)
 
     private fun build(t: Track, art: String?): Activity {
-        fun fill(template: String) = field(
-            template.replace("{title}", t.title)
-                .replace("{artist}", t.artist)
-                .replace("{album}", t.album)
-                .replace("{app}", t.app)
-        )
+        fun fill(template: String) = field(t.fill(template))
 
         val largeText = fill(prefs.largeText)
         val lastfm = if (prefs.links && t.artist.isNotBlank()) {

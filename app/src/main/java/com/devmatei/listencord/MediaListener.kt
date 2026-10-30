@@ -38,7 +38,11 @@ class MediaListener : NotificationListenerService() {
     }
 
     // players love firing a bunch of callbacks at once, wait for them to settle
-    private val update = Runnable { presence.update(current()) }
+    private val update = Runnable {
+        val t = current()
+        if (t == null) NowPlaying.cover.value = null
+        presence.update(t)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -104,6 +108,8 @@ class MediaListener : NotificationListenerService() {
         val c = controllers.firstOrNull { playing(it.playbackState) } ?: controllers.firstOrNull() ?: return null
         val meta = c.metadata ?: return null
         val state = c.playbackState
+        NowPlaying.cover.value = meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART)
 
         val title = meta.text(MediaMetadata.METADATA_KEY_TITLE)
             .ifBlank { meta.text(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) }
