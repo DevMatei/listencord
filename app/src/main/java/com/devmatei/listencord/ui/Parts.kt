@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -54,6 +55,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devmatei.listencord.Prefs
+
+// the rounded shape everything on a page should match: settings rows, fields, buttons
+val corner = 28.dp
 
 // every page is the same shape: big collapsing title, scrolling column under it
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -178,7 +182,7 @@ fun Field(
         supportingText = hint?.let { { Text(it) } },
         singleLine = true,
         keyboardOptions = keyboard,
-        shape = MaterialTheme.shapes.large,
+        shape = RoundedCornerShape(corner),
         modifier = Modifier.fillMaxWidth(),
     )
 }

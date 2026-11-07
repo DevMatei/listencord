@@ -27,12 +27,37 @@ object Artwork {
             null
         }
 
-        val url = (if (prefs.hasNavidrome) attempt { navidrome(prefs, t) } else null)
+        // for podcast tracks, try iTunes Search API first (no auth needed)
+        val url = (if (t.isPodcast()) attempt { itunes(t) } else null)
+            ?: (if (prefs.hasNavidrome) attempt { navidrome(prefs, t) } else null)
             ?: (if (prefs.lbToken.isNotBlank()) attempt { listenbrainz(prefs.lbToken, t) } else null)
 
         // don't remember misses that were just us being offline
         if (url != null || !failed) cache.put(key, url ?: "")
         url
+    }
+
+    // iTunes Search API for podcast artwork (no auth required)
+    // in players, album = episode title and artist = show name, so search by both
+    private fun itunes(t: Track): String? {
+        if (t.album.isBlank() && t.artist.isBlank()) return null
+        val term = t.album.ifBlank { t.artist }
+        val q = "term=${enc(term)}&media=podcast&entity=podcast&limit=10"
+        val json = JSONObject(get("https://itunes.apple.com/search?$q"))
+        val results = json.optJSONArray("results") ?: return null
+        for (i in 0 until results.length()) {
+            val r = results.getJSONObject(i)
+            // narrow to results that match the show name when we have one
+            if (t.artist.isNotBlank() &&
+                !r.optString("artistName").contains(t.artist, true) &&
+                !t.artist.contains(r.optString("artistName"), true)
+            ) continue
+            return r.optString("artworkUrl600")
+                .ifBlank { r.optString("artworkUrl100") }
+                .ifBlank { r.optString("artworkUrl30") }
+                .takeIf { it.startsWith("http") }
+        }
+        return null
     }
 
     // same trick feishin uses: getAlbumInfo2 hands back a public /share/img url,

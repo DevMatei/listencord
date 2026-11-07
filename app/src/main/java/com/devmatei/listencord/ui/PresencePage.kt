@@ -23,6 +23,7 @@ fun PresencePage(prefs: Prefs, onBack: () -> Unit) {
     var timestamps by remember { mutableStateOf(prefs.timestamps) }
     var paused by remember { mutableStateOf(prefs.showPaused) }
     var links by remember { mutableStateOf(prefs.links) }
+    var podcastGeneric by remember { mutableStateOf(prefs.podcastGeneric) }
 
     Page("presence", onBack = onBack) {
         PresencePreview(prefs)
@@ -64,6 +65,15 @@ fun PresencePage(prefs: Prefs, onBack: () -> Unit) {
                 display = it
                 prefs.display = it
             }
+        }
+
+        Group("podcasts") {
+            SwitchItem(
+                0, 1,
+                "show podcasts generically",
+                "if on, shows 'listening to a podcast' with no details or art",
+                podcastGeneric
+            ) { podcastGeneric = it; prefs.podcastGeneric = it }
         }
 
         Group("extras") {

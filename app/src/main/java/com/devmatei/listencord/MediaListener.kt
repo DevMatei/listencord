@@ -133,6 +133,7 @@ class MediaListener : NotificationListenerService() {
             duration = meta.getLong(MediaMetadata.METADATA_KEY_DURATION).coerceAtLeast(0),
             playing = isPlaying,
             start = System.currentTimeMillis() - position.coerceAtLeast(0),
+            genre = meta.text(MediaMetadata.METADATA_KEY_GENRE),
         )
     }
 

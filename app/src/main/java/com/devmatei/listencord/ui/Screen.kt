@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Album
@@ -38,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -81,6 +83,7 @@ private fun Home(prefs: Prefs, granted: Boolean, onGrant: () -> Unit, open: (Str
         listOfNotNull(
             "navidrome".takeIf { prefs.hasNavidrome },
             "listenbrainz".takeIf { prefs.lbToken.isNotBlank() },
+            "itunes".takeIf { prefs.showArt },
         )
     }
 
@@ -145,7 +148,7 @@ private fun Setup(icon: ImageVector, title: String, text: String, action: String
                 Text(title, style = MaterialTheme.typography.titleMedium)
             }
             Text(text, style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = onClick, shapes = ButtonDefaults.shapes(), modifier = Modifier.align(Alignment.End)) { Text(action) }
+            Button(onClick = onClick, shape = RoundedCornerShape(corner), modifier = Modifier.align(Alignment.End)) { Text(action) }
         }
     }
 }

@@ -57,6 +57,9 @@ class Prefs(context: Context) {
     var fallbackArt: String
         get() = str("fallback_art")
         set(v) = put("fallback_art", v)
+    var podcastGeneric: Boolean
+        get() = sp.getBoolean("podcast_generic", false)
+        set(v) = put("podcast_generic", v)
 
     // artwork sources
     var ndUrl: String

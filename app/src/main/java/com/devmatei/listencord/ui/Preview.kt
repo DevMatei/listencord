@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -46,7 +47,7 @@ import com.devmatei.listencord.Prefs
 import com.devmatei.listencord.Track
 import kotlinx.coroutines.delay
 
-private val sample = Track("", "your player", "song title", "artist", "album", 0, true, 0)
+private val sample = Track("", "your player", "song title", "artist", "album", 0, true, 0, "")
 
 private val verbs = mapOf(0 to "playing", 2 to "listening to", 3 to "watching", 5 to "competing in")
 
@@ -59,12 +60,15 @@ fun PresencePreview(prefs: Prefs) {
     val cover by NowPlaying.cover.collectAsState()
     val t = live ?: sample
     val idle = live == null || !prefs.enabled
+    val generic = t.isPodcast() && prefs.podcastGeneric
 
     val lines = remember(tick, t) {
-        listOf(prefs.details, prefs.state, prefs.largeText).map { t.fill(it) }.filter { it.isNotEmpty() }
+        if (generic) emptyList() else
+            listOf(prefs.details, prefs.state, prefs.largeText).map { t.fill(it) }.filter { it.isNotEmpty() }
     }
     val header = remember(tick, t) {
-        "${verbs[prefs.type] ?: "listening to"} ${t.fill(prefs.name).ifEmpty { "music" }}"
+        if (generic) "listening to a podcast" else
+            "${verbs[prefs.type] ?: "listening to"} ${t.fill(prefs.name).ifEmpty { "music" }}"
     }
 
     Card(
@@ -78,48 +82,79 @@ fun PresencePreview(prefs: Prefs) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f),
             )
             Spacer(Modifier.height(14.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.alpha(if (idle) 0.6f else 1f),
-            ) {
-                Crossfade(cover?.takeIf { live != null && prefs.showArt }, label = "cover") { bmp ->
-                    if (bmp != null) {
-                        Image(
-                            bmp.asImageBitmap(), null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(88.dp).clip(MaterialTheme.shapes.large),
-                        )
-                    } else {
-                        Box(
-                            Modifier.size(88.dp).background(
+            if (generic) {
+                // a deliberate podcast state: a soft glyph tile plus a word, centered
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(120.dp)
+                            .background(
                                 MaterialTheme.colorScheme.primary,
                                 MaterialShapes.Cookie9Sided.toShape(),
                             ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Rounded.MusicNote, null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(36.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Podcasts, null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(56.dp),
+                        )
+                    }
+                    Text(
+                        "a podcast",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.alpha(if (idle) 0.6f else 1f),
+                ) {
+                    Crossfade(cover?.takeIf { live != null && prefs.showArt }, label = "cover") { bmp ->
+                        if (bmp != null) {
+                            Image(
+                                bmp.asImageBitmap(), null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(88.dp).clip(MaterialTheme.shapes.large),
+                            )
+                        } else {
+                            Box(
+                                Modifier.size(88.dp).background(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialShapes.Cookie9Sided.toShape(),
+                                ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.MusicNote, null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(36.dp),
+                                )
+                            }
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        lines.forEachIndexed { i, line ->
+                            Text(
+                                line,
+                                style = if (i == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (i == 0) FontWeight.SemiBold else null,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    lines.forEachIndexed { i, line ->
-                        Text(
-                            line,
-                            style = if (i == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge,
-                            fontWeight = if (i == 0) FontWeight.SemiBold else null,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                AnimatedVisibility(!idle && t.playing && prefs.timestamps && t.duration > 0) {
+                    Progress(t)
                 }
-            }
-            AnimatedVisibility(!idle && t.playing && prefs.timestamps && t.duration > 0) {
-                Progress(t)
             }
         }
     }

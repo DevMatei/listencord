@@ -13,6 +13,7 @@ data class Track(
     val playing: Boolean,
     // wall clock ms of when the song would have started at this position
     val start: Long,
+    val genre: String = "",
 ) {
     fun fill(template: String) = template
         .replace("{title}", title)
@@ -20,6 +21,24 @@ data class Track(
         .replace("{album}", album)
         .replace("{app}", app)
         .trim()
+
+    // known podcast app package names that may not set genre
+    private val podcastPkgs = setOf(
+        "com.ranisaurus.antennapod",
+        "com.pocketcasts",
+        "com.player.fm",
+        "fm.player",
+        "com.google.android.googlequicksearchbox",
+        "com.spotify.music",
+        "de.danoeh.antennapod",
+    )
+
+    // podcasts usually report artist == album (both = show name); many players don't set genre
+    private fun looksLikePodcast(): Boolean =
+        album.isNotBlank() && artist == album
+
+    fun isPodcast(): Boolean =
+        genre.contains("podcast", true) || pkg in podcastPkgs || looksLikePodcast()
 }
 
 // what the service is doing right now, so the ui can show it

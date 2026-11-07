@@ -18,7 +18,9 @@ import night.milkyway.antisocialcord.model.RpcPayload
 import night.milkyway.antisocialcord.model.StatusDisplayType
 import kotlin.math.abs
 
-// everything here runs on the main thread
+// a tiny generic podcast icon served from a stable CDN (twemoji studio microphone)
+private const val GENERIC_PODCAST_ART = "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/1f399.png"
+
 class Presence(context: Context, private val prefs: Prefs) {
     private val client = DiscordRpcClient(context.applicationContext)
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -68,7 +70,10 @@ class Presence(context: Context, private val prefs: Prefs) {
         // only hit the network when the album actually changes, Artwork caches the rest
         lookup?.cancel()
         lookup = scope.launch {
-            val art = if (prefs.showArt) Artwork.find(prefs, t) ?: prefs.fallbackArt.ifBlank { null } else null
+            // skip art lookup entirely in generic podcast mode (no assets shown)
+            val art = if (prefs.showArt && !(t.isPodcast() && prefs.podcastGeneric))
+                Artwork.find(prefs, t) ?: prefs.fallbackArt.ifBlank { null }
+            else null
             NowPlaying.art.value = art
             pending = build(t, art)
             flush()
@@ -152,6 +157,28 @@ class Presence(context: Context, private val prefs: Prefs) {
 
     private fun build(t: Track, art: String?): Activity {
         fun fill(template: String) = field(t.fill(template))
+
+        // when generic podcast mode is on, show just the icon and "a podcast"
+        if (t.isPodcast() && prefs.podcastGeneric) {
+            return Activity(
+                name = "a podcast",
+                activityType = ActivityType.entries.firstOrNull { it.value == prefs.type } ?: ActivityType.LISTENING,
+                details = null,
+                state = null,
+                statusDisplayType = StatusDisplayType.entries.firstOrNull { it.value == prefs.display },
+                stateUrl = null,
+                detailsUrl = null,
+                timestamps = null,
+                assets = ActivityAssets(
+                    largeImage = GENERIC_PODCAST_ART,
+                    largeText = null,
+                    largeUrl = null,
+                    smallImage = null,
+                    smallText = null,
+                    smallUrl = null,
+                ),
+            )
+        }
 
         val largeText = fill(prefs.largeText)
         val lastfm = if (prefs.links && t.artist.isNotBlank()) {

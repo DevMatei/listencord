@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -32,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -59,7 +62,7 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
 
     Page("album art", onBack = onBack) {
         Group {
-            SwitchItem(0, 1, "show album art", "navidrome is checked first, then listenbrainz", showArt) {
+            SwitchItem(0, 1, "show album art", "navidrome is checked first, then listenbrainz, then itunes for podcasts", showArt) {
                 showArt = it
                 prefs.showArt = it
             }
@@ -69,34 +72,44 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Source(Icons.Rounded.Dns, "navidrome", if (connected) "connected as ${prefs.ndUser}" else "your own server") {
                     if (connected) {
-                        OutlinedButton(
-                            onClick = {
-                                prefs.ndToken = ""
-                                prefs.ndSalt = ""
-                                connected = false
-                            },
-                            shapes = ButtonDefaults.shapes(),
-                            modifier = Modifier.align(Alignment.End),
-                        ) { Text("forget") }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "connected as ${prefs.ndUser}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    prefs.ndToken = ""
+                                    prefs.ndSalt = ""
+                                    connected = false
+                                },
+                                shape = RoundedCornerShape(corner),
+                            ) { Text("forget") }
+                        }
                         return@Source
                     }
                     OutlinedTextField(
                         url, { url = it }, label = { Text("server url") }, singleLine = true,
                         placeholder = { Text("https://music.example.com") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        shape = MaterialTheme.shapes.large,
+                        shape = RoundedCornerShape(corner),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         user, { user = it }, label = { Text("username") }, singleLine = true,
-                        shape = MaterialTheme.shapes.large,
+                        shape = RoundedCornerShape(corner),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         pass, { pass = it }, label = { Text("password") }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        shape = MaterialTheme.shapes.large,
+                        shape = RoundedCornerShape(corner),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Busy(ndBusy, ndMsg, "connect", enabled = url.isNotBlank() && user.isNotBlank() && pass.isNotEmpty()) {
@@ -126,7 +139,7 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
                         token, { token = it.trim(); prefs.lbToken = it.trim(); lbMsg = null },
                         label = { Text("user token") }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        shape = MaterialTheme.shapes.large,
+                        shape = RoundedCornerShape(corner),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Busy(lbBusy, lbMsg, "check", enabled = token.isNotBlank()) {
@@ -136,6 +149,15 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
                             lbBusy = false
                         }
                     }
+                }
+
+                Source(Icons.Rounded.Podcasts, "itunes podcast search", "no auth needed, works for podcast tracks automatically") {
+                    Text(
+                        "when a podcast is detected, listencord searches the itunes podcast directory for artwork. no setup required.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
                 }
 
                 Source(Icons.Rounded.Image, "fallback", "used when nothing's found, leave empty for none") {
@@ -175,7 +197,7 @@ private fun ColumnScope.Busy(busy: Boolean, message: String?, action: String, en
     ) {
         if (busy) LoadingIndicator(Modifier.size(36.dp))
         else message?.let { Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f, fill = false)) }
-        Button(onClick = onClick, enabled = enabled && !busy, shapes = ButtonDefaults.shapes()) { Text(action) }
+        Button(onClick = onClick, enabled = enabled && !busy, shape = RoundedCornerShape(corner)) { Text(action) }
     }
 }
 
