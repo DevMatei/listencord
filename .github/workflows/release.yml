@@ -1,15 +1,13 @@
 name: Release APK
 
 on:
-  # Building a tag (e.g. v1.1) publishes a GitHub Release with the APK attached.
   push:
     tags:
       - 'v*'
-  # Allows running the same pipeline by hand from the Actions tab.
   workflow_dispatch:
 
 permissions:
-  contents: write # required to create the GitHub Release and upload assets
+  contents: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -29,20 +27,14 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      # ubuntu-latest has the Android SDK preinstalled. Locate its sdkmanager
-      # directly instead of using setup-android, which installs the removed
-      # legacy "tools" package and fails on current runners.
       - name: Set up Android SDK environment
         run: |
           SDKMGR=$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)
-          test -n "$SDKMGR" || { echo "sdkmanager not found under $ANDROID_HOME"; exit 1; }
+          test -n "$SDKMGR"
           echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
           "$SDKMGR" --version
           yes | "$SDKMGR" --licenses > /dev/null || true
 
-      # compileSdk/targetSdk are 37 in app/build.gradle.kts. API 37 is shipped
-      # as SDK-extension packages (there is no plain "platforms;android-37"),
-      # so install the base platform, an extension platform and build tools.
       - name: Install Android SDK platform
         run: |
           "$SDKMGR" "platforms;android-37.0" "platforms;android-37.2" "build-tools;37.0.0"
@@ -50,8 +42,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # Work out the tag for both tag pushes and manual runs. This keeps the
-      # release step from failing when there is no tag ref (manual dispatch).
       - name: Resolve release tag
         id: tag
         run: |
@@ -61,22 +51,20 @@ jobs:
             TAG="manual-$(git rev-parse --short HEAD)"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Releasing as $TAG"
 
       - name: Build release APK
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
         run: |
           APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
-          test -n "$APK" || { echo "No APK produced by assembleRelease"; exit 1; }
+          test -n "$APK"
           mv "$APK" "app/build/outputs/apk/release/listencord-${{ steps.tag.outputs.tag }}.apk"
 
       - name: Verify APK
         run: |
           APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
-          test -s "$APK" || { echo "APK is missing or empty"; exit 1; }
-          echo "APK: $APK"
+          test -s "$APK"
           ls -lh "$APK"
 
       - name: Upload APK artifact
