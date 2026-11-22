@@ -7,6 +7,17 @@ import androidx.core.content.edit
 class Prefs(context: Context) {
     val sp: SharedPreferences = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
 
+    init {
+        // 1.1 had a single on/off for hiding podcasts
+        if (sp.contains("podcast_generic")) {
+            val generic = sp.getBoolean("podcast_generic", false)
+            sp.edit {
+                remove("podcast_generic")
+                putInt("podcast_mode", if (generic) PODCAST_HIDDEN else PODCAST_FULL)
+            }
+        }
+    }
+
     private fun str(key: String, def: String = "") = sp.getString(key, def) ?: def
     private fun put(key: String, value: String) = sp.edit { putString(key, value) }
     private fun put(key: String, value: Boolean) = sp.edit { putBoolean(key, value) }
@@ -17,12 +28,12 @@ class Prefs(context: Context) {
         set(v) = put("enabled", v)
 
     var apps: Set<String>
-        get() = sp.getStringSet("apps", emptySet())!!
+        get() = sp.getStringSet("apps", null) ?: emptySet()
         set(v) = sp.edit { putStringSet("apps", v) }
 
     // discord
     var appId: String
-        get() = str("app_id", "1565801603527737404")
+        get() = str("app_id", DEFAULT_APP_ID)
         set(v) = put("app_id", v)
     var name: String
         get() = str("name", "music")
@@ -51,17 +62,26 @@ class Prefs(context: Context) {
     var links: Boolean
         get() = sp.getBoolean("links", false)
         set(v) = put("links", v)
+
+    // podcasts
+    var podcastMode: Int
+        get() = sp.getInt("podcast_mode", PODCAST_FULL)
+        set(v) = put("podcast_mode", v)
+    // null until the user touches it, so new known apps still show up for old installs
+    var podcastApps: Set<String>
+        get() = sp.getStringSet("podcast_apps", null) ?: Podcasts.KNOWN
+        set(v) = sp.edit { putStringSet("podcast_apps", v) }
+
+    // art
     var showArt: Boolean
         get() = sp.getBoolean("show_art", true)
         set(v) = put("show_art", v)
+    var itunes: Boolean
+        get() = sp.getBoolean("itunes", true)
+        set(v) = put("itunes", v)
     var fallbackArt: String
         get() = str("fallback_art")
         set(v) = put("fallback_art", v)
-    var podcastGeneric: Boolean
-        get() = sp.getBoolean("podcast_generic", false)
-        set(v) = put("podcast_generic", v)
-
-    // artwork sources
     var ndUrl: String
         get() = str("nd_url")
         set(v) = put("nd_url", v)
@@ -82,6 +102,11 @@ class Prefs(context: Context) {
     val hasNavidrome get() = ndUrl.isNotBlank() && ndUser.isNotBlank() && ndToken.isNotBlank()
 
     companion object {
-        val ART_KEYS = setOf("nd_url", "nd_user", "nd_token", "nd_salt", "lb_token")
+        const val DEFAULT_APP_ID = "1565801603527737404"
+        const val PODCAST_FULL = 0
+        const val PODCAST_SHOW = 1
+        const val PODCAST_HIDDEN = 2
+
+        val ART_KEYS = setOf("nd_url", "nd_user", "nd_token", "nd_salt", "lb_token", "itunes")
     }
 }

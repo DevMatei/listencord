@@ -18,8 +18,10 @@ import night.milkyway.antisocialcord.model.RpcPayload
 import night.milkyway.antisocialcord.model.StatusDisplayType
 import kotlin.math.abs
 
-// a tiny generic podcast icon served from a stable CDN (twemoji studio microphone)
-private const val GENERIC_PODCAST_ART = "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/1f399.png"
+// twemoji studio microphone, pinned so it can't change under us
+private const val TWEMOJI = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72"
+private const val GENERIC_PODCAST_ART = "$TWEMOJI/1f399.png"
+private const val GENERIC_MUSIC_ART = "$TWEMOJI/1f3b5.png"
 
 class Presence(context: Context, private val prefs: Prefs) {
     private val client = DiscordRpcClient(context.applicationContext)
@@ -40,7 +42,7 @@ class Presence(context: Context, private val prefs: Prefs) {
                     ready = true
                     connecting = false
                     timeout?.cancel()
-                    NowPlaying.status.value = "connected to discord"
+                    NowPlaying.status.value = Status.CONNECTED
                     flush()
                 }
             }
@@ -50,7 +52,7 @@ class Presence(context: Context, private val prefs: Prefs) {
                     ready = false
                     connecting = false
                     sent = null
-                    NowPlaying.status.value = "disconnected"
+                    NowPlaying.status.value = Status.DISCONNECTED
                 }
             }
         })
@@ -70,12 +72,10 @@ class Presence(context: Context, private val prefs: Prefs) {
         // only hit the network when the album actually changes, Artwork caches the rest
         lookup?.cancel()
         lookup = scope.launch {
-            // skip art lookup entirely in generic podcast mode (no assets shown)
-            val art = if (prefs.showArt && !(t.isPodcast() && prefs.podcastGeneric))
-                Artwork.find(prefs, t) ?: prefs.fallbackArt.ifBlank { null }
-            else null
+            val shown = Shown.of(t, prefs)
+            val art = if (shown.art) Artwork.find(prefs, t) ?: prefs.fallbackArt.ifBlank { null } else null
             NowPlaying.art.value = art
-            pending = build(t, art)
+            pending = build(t, shown, art)
             flush()
         }
     }
@@ -115,16 +115,16 @@ class Presence(context: Context, private val prefs: Prefs) {
         if (connecting) return
         val id = prefs.appId.trim().toLongOrNull()
         if (id == null) {
-            NowPlaying.status.value = "set your discord application id"
+            NowPlaying.status.value = Status.NO_ID
             return
         }
         try {
             connecting = true
             client.connect(id)
-            NowPlaying.status.value = "connecting to discord"
+            NowPlaying.status.value = Status.CONNECTING
         } catch (_: Exception) {
             connecting = false
-            NowPlaying.status.value = "discord isn't installed"
+            NowPlaying.status.value = Status.NO_DISCORD
             return
         }
         // discord never answered, give up until the next change
@@ -133,7 +133,7 @@ class Presence(context: Context, private val prefs: Prefs) {
             delay(15_000)
             if (!ready) {
                 disconnect()
-                NowPlaying.status.value = "discord didn't respond"
+                NowPlaying.status.value = Status.NO_ANSWER
             }
         }
     }
@@ -148,71 +148,40 @@ class Presence(context: Context, private val prefs: Prefs) {
         ready = false
         connecting = false
         sent = null
-        NowPlaying.status.value = "idle"
+        NowPlaying.status.value = Status.IDLE
     }
 
     // position updates come in all the time, only care if it actually jumped
     private fun same(a: Track, b: Track) =
         a.copy(start = 0) == b.copy(start = 0) && (!b.playing || abs(a.start - b.start) < 3000)
 
-    private fun build(t: Track, art: String?): Activity {
-        fun fill(template: String) = field(t.fill(template))
+    private fun build(t: Track, shown: Shown, art: String?): Activity {
+        val lastfm = if (shown.links) "https://www.last.fm/music/${Artwork.enc(t.artist)}" else null
+        // with no image discord draws a grey question mark, an emoji looks better
+        val image = when {
+            shown.genericArt -> GENERIC_PODCAST_ART
+            art != null -> art
+            t.podcast -> GENERIC_PODCAST_ART
+            else -> GENERIC_MUSIC_ART
+        }
 
-        // when generic podcast mode is on, show just the icon and "a podcast"
-        if (t.isPodcast() && prefs.podcastGeneric) {
-            return Activity(
-                name = "a podcast",
-                activityType = ActivityType.entries.firstOrNull { it.value == prefs.type } ?: ActivityType.LISTENING,
-                details = null,
-                state = null,
-                statusDisplayType = StatusDisplayType.entries.firstOrNull { it.value == prefs.display },
-                stateUrl = null,
-                detailsUrl = null,
-                timestamps = null,
-                assets = ActivityAssets(
-                    largeImage = GENERIC_PODCAST_ART,
-                    largeText = null,
+        return Activity(
+            name = shown.name,
+            activityType = ActivityType.entries.firstOrNull { it.value == prefs.type } ?: ActivityType.LISTENING,
+            details = shown.details,
+            state = shown.state,
+            statusDisplayType = StatusDisplayType.entries.firstOrNull { it.value == prefs.display },
+            stateUrl = lastfm?.takeIf { it.length <= 256 },
+            detailsUrl = lastfm?.let { "$it/_/${Artwork.enc(t.title)}" }?.takeIf { it.length <= 256 },
+            timestamps = if (shown.timestamps) ActivityTimestamps(t.start, t.start + t.duration) else null,
+            assets = ActivityAssets(
+                    largeImage = image,
+                    largeText = shown.largeText,
                     largeUrl = null,
                     smallImage = null,
                     smallText = null,
                     smallUrl = null,
                 ),
-            )
-        }
-
-        val largeText = fill(prefs.largeText)
-        val lastfm = if (prefs.links && t.artist.isNotBlank()) {
-            "https://www.last.fm/music/${Artwork.enc(t.artist)}"
-        } else null
-
-        return Activity(
-            name = fill(prefs.name) ?: "music",
-            activityType = ActivityType.entries.firstOrNull { it.value == prefs.type } ?: ActivityType.LISTENING,
-            details = fill(prefs.details),
-            state = fill(prefs.state),
-            statusDisplayType = StatusDisplayType.entries.firstOrNull { it.value == prefs.display },
-            stateUrl = lastfm?.takeIf { it.length <= 256 },
-            detailsUrl = lastfm?.let { "$it/_/${Artwork.enc(t.title)}" }?.takeIf { it.length <= 256 },
-            timestamps = if (prefs.timestamps && t.playing && t.duration > 0) {
-                ActivityTimestamps(t.start, t.start + t.duration)
-            } else null,
-            assets = if (art != null || largeText != null) {
-                ActivityAssets(
-                    largeImage = art,
-                    largeText = largeText,
-                    largeUrl = null,
-                    smallImage = null,
-                    smallText = null,
-                    smallUrl = null,
-                )
-            } else null,
         )
-    }
-
-    // discord wants 2..128 chars
-    private fun field(s: String): String? {
-        val v = s.trim()
-        if (v.isEmpty()) return null
-        return v.padEnd(2, ' ').take(128)
     }
 }

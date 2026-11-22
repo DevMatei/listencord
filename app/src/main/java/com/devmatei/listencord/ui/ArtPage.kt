@@ -14,7 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.Podcasts
+import androidx.compose.material.icons.rounded.HideImage
+import androidx.compose.material.icons.rounded.TravelExplore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -24,6 +25,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,9 +49,10 @@ import java.security.SecureRandom
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
+fun ArtPage(prefs: Prefs) {
     val scope = rememberCoroutineScope()
     var showArt by remember { mutableStateOf(prefs.showArt) }
+    var itunes by remember { mutableStateOf(prefs.itunes) }
     var connected by remember { mutableStateOf(prefs.hasNavidrome) }
     var url by rememberSaveable { mutableStateOf(prefs.ndUrl) }
     var user by rememberSaveable { mutableStateOf(prefs.ndUser) }
@@ -60,16 +63,18 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
     var lbBusy by remember { mutableStateOf(false) }
     var lbMsg by remember { mutableStateOf<String?>(null) }
 
-    Page("album art", onBack = onBack) {
+    Page("album art", "where covers come from") {
         Group {
-            SwitchItem(0, 1, "show album art", "navidrome is checked first, then listenbrainz, then itunes for podcasts", showArt) {
+            SwitchItem(0, 1, "show album art", "looked up once per album and kept", showArt, Icons.Rounded.Image) {
                 showArt = it
                 prefs.showArt = it
             }
         }
 
         AnimatedVisibility(showArt) {
-            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Hint("checked top to bottom, first hit wins. podcasts skip straight to itunes.")
+
                 Source(Icons.Rounded.Dns, "navidrome", if (connected) "connected as ${prefs.ndUser}" else "your own server") {
                     if (connected) {
                         Row(
@@ -78,7 +83,7 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "connected as ${prefs.ndUser}",
+                                "covers come from your library",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -97,19 +102,19 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
                         url, { url = it }, label = { Text("server url") }, singleLine = true,
                         placeholder = { Text("https://music.example.com") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        shape = RoundedCornerShape(corner),
+                        shape = fieldShape,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         user, { user = it }, label = { Text("username") }, singleLine = true,
-                        shape = RoundedCornerShape(corner),
+                        shape = fieldShape,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         pass, { pass = it }, label = { Text("password") }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        shape = RoundedCornerShape(corner),
+                        shape = fieldShape,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Busy(ndBusy, ndMsg, "connect", enabled = url.isNotBlank() && user.isNotBlank() && pass.isNotEmpty()) {
@@ -139,7 +144,7 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
                         token, { token = it.trim(); prefs.lbToken = it.trim(); lbMsg = null },
                         label = { Text("user token") }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        shape = RoundedCornerShape(corner),
+                        shape = fieldShape,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Busy(lbBusy, lbMsg, "check", enabled = token.isNotBlank()) {
@@ -151,16 +156,14 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
                     }
                 }
 
-                Source(Icons.Rounded.Podcasts, "itunes podcast search", "no auth needed, works for podcast tracks automatically") {
-                    Text(
-                        "when a podcast is detected, listencord searches the itunes podcast directory for artwork. no setup required.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
-                }
+                Source(
+                    Icons.Rounded.TravelExplore, "itunes", "no account needed, covers music and podcasts",
+                    trailing = {
+                        Switch(checked = itunes, onCheckedChange = { itunes = it; prefs.itunes = it })
+                    },
+                )
 
-                Source(Icons.Rounded.Image, "fallback", "used when nothing's found, leave empty for none") {
+                Source(Icons.Rounded.HideImage, "fallback", "used when nothing's found, leave empty for none") {
                     Field("image url", prefs.fallbackArt) { prefs.fallbackArt = it.trim() }
                 }
             }
@@ -169,20 +172,27 @@ fun ArtPage(prefs: Prefs, onBack: () -> Unit) {
 }
 
 @Composable
-private fun Source(icon: ImageVector, title: String, sub: String, content: @Composable ColumnScope.() -> Unit) {
+private fun Source(
+    icon: ImageVector,
+    title: String,
+    sub: String,
+    trailing: (@Composable () -> Unit)? = null,
+    content: (@Composable ColumnScope.() -> Unit)? = null,
+) {
     Card(
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = RoundedCornerShape(corner),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Badge(icon)
-                Column {
+                Badge(icon, MaterialTheme.colorScheme.primaryContainer)
+                Column(Modifier.weight(1f)) {
                     Text(title, style = MaterialTheme.typography.titleMedium)
                     Text(sub, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                trailing?.invoke()
             }
-            content()
+            content?.invoke(this)
         }
     }
 }

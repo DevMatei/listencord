@@ -3,6 +3,7 @@ package com.devmatei.listencord
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -16,49 +17,84 @@ object Artwork {
     fun clear() = cache.evictAll()
 
     suspend fun find(prefs: Prefs, t: Track): String? = withContext(Dispatchers.IO) {
-        val key = "${t.artist}|${t.album.ifBlank { t.title }}".lowercase()
+        val key = if (t.podcast) "pod|${t.show}".lowercase()
+        else "${t.artist}|${t.album.ifBlank { t.title }}".lowercase()
         cache.get(key)?.let { return@withContext it.ifEmpty { null } }
 
         var failed = false
-        fun attempt(block: () -> String?) = try {
+        fun attempt(on: Boolean, block: () -> String?) = if (!on) null else try {
             block()
         } catch (_: Exception) {
             failed = true
             null
         }
 
-        // for podcast tracks, try iTunes Search API first (no auth needed)
-        val url = (if (t.isPodcast()) attempt { itunes(t) } else null)
-            ?: (if (prefs.hasNavidrome) attempt { navidrome(prefs, t) } else null)
-            ?: (if (prefs.lbToken.isNotBlank()) attempt { listenbrainz(prefs.lbToken, t) } else null)
+        // your own server and listenbrainz don't know podcasts, itunes does
+        val url = if (t.podcast) {
+            attempt(prefs.itunes) { itunesPodcast(t) }
+        } else {
+            attempt(prefs.hasNavidrome) { navidrome(prefs, t) }
+                ?: attempt(prefs.lbToken.isNotBlank()) { listenbrainz(prefs.lbToken, t) }
+                ?: attempt(prefs.itunes) { itunesMusic(t) }
+                // a podcast the player called music, only trust an exact show name
+                ?: attempt(prefs.itunes) { itunesPodcast(t, exact = true) }
+        }
 
         // don't remember misses that were just us being offline
         if (url != null || !failed) cache.put(key, url ?: "")
         url
     }
 
-    // iTunes Search API for podcast artwork (no auth required)
-    // in players, album = episode title and artist = show name, so search by both
-    private fun itunes(t: Track): String? {
-        if (t.album.isBlank() && t.artist.isBlank()) return null
-        val term = t.album.ifBlank { t.artist }
-        val q = "term=${enc(term)}&media=podcast&entity=podcast&limit=10"
-        val json = JSONObject(get("https://itunes.apple.com/search?$q"))
-        val results = json.optJSONArray("results") ?: return null
-        for (i in 0 until results.length()) {
-            val r = results.getJSONObject(i)
-            // narrow to results that match the show name when we have one
-            if (t.artist.isNotBlank() &&
-                !r.optString("artistName").contains(t.artist, true) &&
-                !t.artist.contains(r.optString("artistName"), true)
-            ) continue
-            return r.optString("artworkUrl600")
-                .ifBlank { r.optString("artworkUrl100") }
-                .ifBlank { r.optString("artworkUrl30") }
-                .takeIf { it.startsWith("http") }
+    // collectionName is the show, artistName is whoever publishes it
+    private fun itunesPodcast(t: Track, exact: Boolean = false): String? {
+        val names = listOf(t.show, t.album, t.artist).filter { it.isNotBlank() }.distinct()
+        for (name in names) {
+            val results = itunes("term=${enc(name)}&media=podcast&entity=podcast&limit=10")
+            best(results, exact) { norm(it.optString("collectionName")) to norm(name) }?.let { return it }
         }
         return null
     }
+
+    // no setup needed, so this is what most people end up with.
+    // results are full of tributes and karaoke, so the artist has to match too
+    private fun itunesMusic(t: Track): String? {
+        if (t.artist.isBlank()) return null
+        val byAlbum = t.album.isNotBlank()
+        val term = "${t.artist} ${if (byAlbum) t.album else t.title}"
+        val entity = if (byAlbum) "album" else "song"
+        val results = itunes("term=${enc(term)}&media=music&entity=$entity&limit=25")
+        val artist = norm(t.artist)
+        val wanted = norm(if (byAlbum) t.album else t.title)
+        return best(results) { r ->
+            if (!close(norm(r.optString("artistName")), artist)) return@best null
+            norm(r.optString(if (byAlbum) "collectionName" else "trackName")) to wanted
+        }
+    }
+
+    private fun itunes(query: String) =
+        JSONObject(get("https://itunes.apple.com/search?$query")).optJSONArray("results") ?: JSONArray()
+
+    // exact name match wins, otherwise the first one that's close
+    private fun best(results: JSONArray, exact: Boolean = false, names: (JSONObject) -> Pair<String, String>?): String? {
+        var loose: String? = null
+        for (i in 0 until results.length()) {
+            val r = results.getJSONObject(i)
+            val (got, want) = names(r) ?: continue
+            if (want.isEmpty()) continue
+            val art = r.optString("artworkUrl600")
+                .ifBlank { r.optString("artworkUrl100").replace("100x100bb", "600x600bb") }
+                .takeIf { it.startsWith("http") } ?: continue
+            if (got == want) return art
+            if (!exact && loose == null && close(got, want)) loose = art
+        }
+        return loose
+    }
+
+    private fun close(a: String, b: String) = a.isNotEmpty() && b.isNotEmpty() && (a.contains(b) || b.contains(a))
+
+    // "Pinkerton (Deluxe Edition)" and "pinkerton" should match
+    private val junk = Regex("""\s*[(\[][^)\]]*(edition|remaster|deluxe|version|single|ep)[^)\]]*[)\]]|\s+-\s+(single|ep)$""", RegexOption.IGNORE_CASE)
+    private fun norm(s: String) = s.replace(junk, "").lowercase().filter { it.isLetterOrDigit() }
 
     // same trick feishin uses: getAlbumInfo2 hands back a public /share/img url,
     // so the subsonic creds never end up on discord
@@ -136,7 +172,7 @@ object Artwork {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 8000
         c.readTimeout = 8000
-        c.setRequestProperty("User-Agent", "listencord/1.0")
+        c.setRequestProperty("User-Agent", "listencord/${BuildConfig.VERSION_NAME}")
         auth?.let { c.setRequestProperty("Authorization", it) }
         try {
             if (c.responseCode !in 200..299) throw IOException("http ${c.responseCode}")

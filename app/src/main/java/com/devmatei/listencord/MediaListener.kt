@@ -108,8 +108,12 @@ class MediaListener : NotificationListenerService() {
         val c = controllers.firstOrNull { playing(it.playbackState) } ?: controllers.firstOrNull() ?: return null
         val meta = c.metadata ?: return null
         val state = c.playbackState
-        NowPlaying.cover.value = meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+        val cover = meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: meta.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+        // every metadata call hands us a fresh copy, only swap it when the picture changed
+        val old = NowPlaying.cover.value
+        if (cover == null || old == null || !cover.sameAs(old)) NowPlaying.cover.value = cover
 
         val title = meta.text(MediaMetadata.METADATA_KEY_TITLE)
             .ifBlank { meta.text(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) }
@@ -124,16 +128,30 @@ class MediaListener : NotificationListenerService() {
             position += ((SystemClock.elapsedRealtime() - state.lastPositionUpdateTime) * state.playbackSpeed).toLong()
         }
 
+        val album = meta.text(MediaMetadata.METADATA_KEY_ALBUM)
+        val duration = meta.getLong(MediaMetadata.METADATA_KEY_DURATION).coerceAtLeast(0)
+        val podcast = Podcasts.detect(
+            pkg = c.packageName,
+            title = title,
+            artist = artist,
+            album = album,
+            genre = meta.text(MediaMetadata.METADATA_KEY_GENRE),
+            mediaId = meta.text(MediaMetadata.METADATA_KEY_MEDIA_ID) + " " + meta.text(MediaMetadata.METADATA_KEY_MEDIA_URI),
+            duration = duration,
+            mediaType = meta.getLong(Podcasts.MEDIA_TYPE_KEY),
+            apps = prefs.podcastApps,
+        )
+
         return Track(
             pkg = c.packageName,
             app = label(c.packageName),
             title = title,
             artist = artist,
-            album = meta.text(MediaMetadata.METADATA_KEY_ALBUM),
-            duration = meta.getLong(MediaMetadata.METADATA_KEY_DURATION).coerceAtLeast(0),
+            album = album,
+            duration = duration,
             playing = isPlaying,
             start = System.currentTimeMillis() - position.coerceAtLeast(0),
-            genre = meta.text(MediaMetadata.METADATA_KEY_GENRE),
+            podcast = podcast,
         )
     }
 
@@ -142,9 +160,13 @@ class MediaListener : NotificationListenerService() {
 
     private fun MediaMetadata.text(key: String) = getString(key)?.trim().orEmpty()
 
-    private fun label(pkg: String) = try {
-        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
-    } catch (_: Exception) {
-        pkg
+    // asking the package manager every update is slow for no reason
+    private val labels = HashMap<String, String>()
+    private fun label(pkg: String) = labels.getOrPut(pkg) {
+        try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+        } catch (_: Exception) {
+            pkg
+        }
     }
 }

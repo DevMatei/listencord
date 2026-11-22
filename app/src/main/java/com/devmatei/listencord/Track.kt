@@ -13,32 +13,18 @@ data class Track(
     val playing: Boolean,
     // wall clock ms of when the song would have started at this position
     val start: Long,
-    val genre: String = "",
+    val podcast: Boolean = false,
 ) {
+    // players disagree on where the show name goes, artist is the usual spot
+    val show get() = artist.ifBlank { album }
+
     fun fill(template: String) = template
         .replace("{title}", title)
         .replace("{artist}", artist)
         .replace("{album}", album)
+        .replace("{show}", show)
         .replace("{app}", app)
         .trim()
-
-    // known podcast app package names that may not set genre
-    private val podcastPkgs = setOf(
-        "com.ranisaurus.antennapod",
-        "com.pocketcasts",
-        "com.player.fm",
-        "fm.player",
-        "com.google.android.googlequicksearchbox",
-        "com.spotify.music",
-        "de.danoeh.antennapod",
-    )
-
-    // podcasts usually report artist == album (both = show name); many players don't set genre
-    private fun looksLikePodcast(): Boolean =
-        album.isNotBlank() && artist == album
-
-    fun isPodcast(): Boolean =
-        genre.contains("podcast", true) || pkg in podcastPkgs || looksLikePodcast()
 }
 
 // what the service is doing right now, so the ui can show it
@@ -47,5 +33,15 @@ object NowPlaying {
     // whatever the player put in its session, only used for the preview in the app
     val cover = MutableStateFlow<Bitmap?>(null)
     val art = MutableStateFlow<String?>(null)
-    val status = MutableStateFlow("idle")
+    val status = MutableStateFlow(Status.IDLE)
+}
+
+enum class Status(val text: String) {
+    IDLE("idle"),
+    CONNECTING("connecting to discord"),
+    CONNECTED("connected to discord"),
+    DISCONNECTED("disconnected"),
+    NO_ID("set your discord application id"),
+    NO_DISCORD("discord isn't installed"),
+    NO_ANSWER("discord didn't respond"),
 }

@@ -2,12 +2,16 @@
 
 shows what you're listening to on your phone as discord rich presence. pick which apps it watches, it picks up whatever they're playing and puts it on your profile through the discord app using [antisocialcord-kt](https://github.com/Nightdavisao/antisocialcord-kt).
 
-album art comes from your navidrome server if you set one up, otherwise listenbrainz.
+album art comes from your navidrome server if you set one up, then listenbrainz, then itunes (no account needed, so art works out of the box).
+
+## podcasts
+
+it figures out when you're on a podcast: anything from a podcast player (antennapod, pocket casts, podcast addict, castbox and so on, you can change the list), spotify episodes, and long stuff that looks like an episode. podcast art comes from the itunes directory. you can show podcasts like music, show only the podcast's name, or hide it behind a plain "listening to a podcast".
 
 ## setup
 
 1. install, give it notification access (on android 13+ sideloaded you have to allow restricted settings in app info first)
-2. pick your apps, done
+2. pick your players in apps, done
 
 you need the discord app installed and logged in.
 
@@ -35,6 +39,7 @@ pushing a `v*` tag (e.g. `v1.1`) runs [the release workflow](.github/workflows/r
 - [navidrome](https://github.com/navidrome/navidrome), album art from your own server
 - [feishin](https://github.com/jeffvli/feishin), copied how it gets shareable art urls out of navidrome
 - [listenbrainz](https://listenbrainz.org), [musicbrainz](https://musicbrainz.org) and the [cover art archive](https://coverartarchive.org) for art when there's no navidrome
+- the [itunes search api](https://performance-partners.apple.com/search-api) for music and podcast art with no setup
 - [last.fm](https://www.last.fm) for the song and artist links
 - [jetpack compose](https://developer.android.com/compose) and [material 3 expressive](https://m3.material.io) for the ui
 

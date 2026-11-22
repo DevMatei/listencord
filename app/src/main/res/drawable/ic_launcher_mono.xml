@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- chat bubble with eq bars cut out, scaled into the 66dp safe zone -->
+    <group
+        android:pivotX="55"
+        android:pivotY="54.5"
+        android:scaleX="0.9"
+        android:scaleY="0.9"
+        android:translateX="-1"
+        android:translateY="-0.5">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M44,28 H64 A18,18 0 0 1 82,46 V54 A18,18 0 0 1 64,72 H41 L30,80 V46 A18,18 0 0 1 44,28 Z M37,47 A3,3 0 0 1 43,47 V53 A3,3 0 0 1 37,53 Z M47,39 A3,3 0 0 1 53,39 V61 A3,3 0 0 1 47,61 Z M57,44 A3,3 0 0 1 63,44 V56 A3,3 0 0 1 57,56 Z M67,42 A3,3 0 0 1 73,42 V58 A3,3 0 0 1 67,58 Z" />
+    </group>
+</vector>
