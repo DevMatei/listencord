@@ -1,0 +1,88 @@
+name: Release APK
+
+on:
+  # Building a tag (e.g. v1.1) publishes a GitHub Release with the APK attached.
+  push:
+    tags:
+      - 'v*'
+  # Allows running the same pipeline by hand from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: write # required to create the GitHub Release and upload assets
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # compileSdk/targetSdk are 37 in app/build.gradle.kts. API 37 is shipped
+      # as SDK-extension packages (there is no plain "platforms;android-37"),
+      # so install the base platform, an extension platform and build tools.
+      - name: Install Android SDK platform
+        run: sdkmanager "platforms;android-37.0" "platforms;android-37.2" "build-tools;37.0.0"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # Work out the tag for both tag pushes and manual runs. This keeps the
+      # release step from failing when there is no tag ref (manual dispatch).
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="manual-$(git rev-parse --short HEAD)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing as $TAG"
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: |
+          APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
+          test -n "$APK" || { echo "No APK produced by assembleRelease"; exit 1; }
+          mv "$APK" "app/build/outputs/apk/release/listencord-${{ steps.tag.outputs.tag }}.apk"
+
+      - name: Verify APK
+        run: |
+          APK=$(find app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
+          test -s "$APK" || { echo "APK is missing or empty"; exit 1; }
+          echo "APK: $APK"
+          ls -lh "$APK"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: listencord-${{ steps.tag.outputs.tag }}
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: true
