@@ -29,14 +29,23 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # ubuntu-latest has the Android SDK preinstalled. Locate its sdkmanager
+      # directly instead of using setup-android, which installs the removed
+      # legacy "tools" package and fails on current runners.
+      - name: Set up Android SDK environment
+        run: |
+          SDKMGR=$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)
+          test -n "$SDKMGR" || { echo "sdkmanager not found under $ANDROID_HOME"; exit 1; }
+          echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
+          "$SDKMGR" --version
+          yes | "$SDKMGR" --licenses > /dev/null || true
 
       # compileSdk/targetSdk are 37 in app/build.gradle.kts. API 37 is shipped
       # as SDK-extension packages (there is no plain "platforms;android-37"),
       # so install the base platform, an extension platform and build tools.
       - name: Install Android SDK platform
-        run: sdkmanager "platforms;android-37.0" "platforms;android-37.2" "build-tools;37.0.0"
+        run: |
+          "$SDKMGR" "platforms;android-37.0" "platforms;android-37.2" "build-tools;37.0.0"
 
       - name: Make gradlew executable
         run: chmod +x gradlew
